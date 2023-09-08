@@ -20,19 +20,10 @@ from .protocol import (
 
 
 class DPLoad:
-    def __init__(self, bus="can0", bitrate=250000, sa=39, da=208):
+    def __init__(self, bus, sa=39, da=208):
         self.log = logging.getLogger("dpload")
-        self.bitrate = bitrate
-        if isinstance(bus, can.BusABC):
-            self.bus = bus
-            self.busname = bus.channel
-        else:
-            self.log.debug("Conecting to bus %s at %d kbps", bus, bitrate)
-            self.busname = bus
-            self.bus = can.interface.Bus(
-                bustype="socketcan", channel=self.busname, bitrate=self.bitrate
-            )
-            self.busname = bus
+        self.bus = bus
+        self.busname = bus.channel
 
         self.sa = sa
         self.da = da

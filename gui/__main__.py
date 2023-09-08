@@ -13,19 +13,89 @@ import wx
 from ..dpload import DPLoad
 from ..image import Image, ImageTlvType
 
-from .gui import MainWindow
+from .gui import MainWindow, SettingsDialog, AboutDialog
+
+BITRATE_STRINGS = {
+    100000: "100 kbps",
+    125000: "125 kbps",
+    250000: "250 kbps",
+    500000: "500 kbps",
+    1000000: "1 Mbps",
+}
+
+BITRATE_VALUES = {value: key for (key, value) in BITRATE_STRINGS.items()}
+
+root_dir = os.path.dirname(sys.modules[DPLoad.__module__].__file__)
+
+
+def translate_image_path(_, path):
+    return os.path.normpath(os.path.join(root_dir, "gui", path))
+
+
+AboutDialog.GetRuntimeImagePath = translate_image_path
+
+
+class ConfiguredSettingsDialog(SettingsDialog):
+    GetRuntimeImagePath = translate_image_path
+
+    def __init__(self, parent, config, *args, **kwargs):
+        SettingsDialog.__init__(self, parent, *args, **kwargs)
+        self.config = config
+        interface = self.config.Read("/CAN/Interface", "virtual")
+        self.m_choiceDriver.SetSelection(self.m_choiceDriver.FindString(interface))
+
+        self.UpdateChannelChoices()
+
+        bitrate = self.config.ReadInt("/CAN/Bitrate", 250000)
+        bitrate_index = self.m_choiceBitrate.FindString(BITRATE_STRINGS[bitrate])
+        print(f"bitrate={bitrate} index={bitrate_index}")
+        self.m_choiceBitrate.SetSelection(bitrate_index)
+
+    def OnDriverChange(self, event):
+        self.UpdateChannelChoices()
+
+    def UpdateChannelChoices(self):
+        self.m_choiceChannel.Clear()
+        interface = self.m_choiceDriver.GetString(self.m_choiceDriver.GetSelection())
+        channels = [
+            config["channel"]
+            for config in can.detect_available_configs(interfaces=[interface])
+        ]
+        channel = self.config.Read("/CAN/Channel", "can0")
+        self.m_choiceChannel.AppendItems(channels)
+        channel_index = self.m_choiceChannel.FindString(channel)
+        if channel_index == wx.NOT_FOUND:
+            channel_index = 0
+        self.m_choiceChannel.SetSelection(channel_index)
+
+    def ShowModal(self):
+        result = SettingsDialog.ShowModal(self)
+        if result == wx.ID_OK:
+            # Save configured values
+            interface = self.m_choiceDriver.GetString(
+                self.m_choiceDriver.GetSelection()
+            )
+
+            self.config.Write("/CAN/Interface", interface)
+            channel = self.m_choiceChannel.GetString(
+                self.m_choiceChannel.GetSelection()
+            )
+            self.config.Write("/CAN/Channel", channel)
+            bitrate_text = self.m_choiceBitrate.GetString(
+                self.m_choiceBitrate.GetSelection()
+            )
+            bitrate = BITRATE_VALUES[bitrate_text]
+            self.config.WriteInt("/CAN/Bitrate", bitrate)
+            print(f"bitrate => {bitrate}")
+            return result
 
 
 class GUI(MainWindow):
-    def GetRuntimeImagePath(self, path):
-        root_dir = os.path.dirname(sys.modules[MainWindow.__module__].__file__)
-        newpath = os.path.normpath(os.path.join(root_dir, path))
-        return newpath
+    GetRuntimeImagePath = translate_image_path
 
     def __init__(self, parent):
         MainWindow.__init__(self, parent)
 
-        self.dpload = DPLoad(bus="can0", bitrate=250000, sa=39)
         self.image = Image()
         self.da = None
 
@@ -37,7 +107,7 @@ class GUI(MainWindow):
         self.Bind(wx.EVT_WINDOW_DESTROY, self.Cleanup)
 
         self.m_toolConnect.SetDisabledBitmap(
-            wx.Bitmap(self.GetRuntimeImagePath("../data/lan-pending.png"))
+            wx.Bitmap(self.GetRuntimeImagePath("../data/lan-pending-32.png"))
         )
         self.m_toolBar1.ToggleTool(self.m_toolConnect.GetId(), False)
         self.m_toolBar1.EnableTool(self.m_toolConnect.GetId(), False)
@@ -45,25 +115,55 @@ class GUI(MainWindow):
 
         self._load_config()
 
+        self.bus = can.interface.Bus(
+            bustype=self.can_interface,
+            channel=self.can_channel,
+            bitrate=self.can_bitrate,
+        )
+        self.dpload = DPLoad(bus=self.bus, sa=self.sa)
+
     def _load_config(self):
         data_dir = wx.StandardPaths.Get().GetUserDataDir()
         if not os.path.exists(data_dir):
             os.makedirs(data_dir)
         self.config = wx.FileConfig(localFilename=os.path.join(data_dir, "dpload.cfg"))
 
+        self.sa = self.config.ReadInt("/J1939/SA", 39)
+        self.can_interface = self.config.Read("/CAN/Interface", "virtual")
+        self.can_channel = self.config.Read("/CAN/Channel", "can0")
+        self.can_bitrate = self.config.ReadInt("/CAN/Bitrate", 250000)
+
         self.fileHistory.Load(self.config)
+
+    def OnHelpAboutClicked(self, evt):
+        dlg = AboutDialog(self)
+        dlg.ShowModal()
+        dlg.Destroy()
+
+    def OnSettingsClicked(self, evt):
+        dlg = ConfiguredSettingsDialog(self, self.config)
+        try:
+            if dlg.ShowModal() == wx.ID_OK:
+                # Todo: update configuration
+                self.info("updating config")
+            else:
+                # Changes cancelled
+                self.info("config cancelled")
+        finally:
+            dlg.Destroy()
 
     def OnFileHistory(self, evt):
         fileNum = evt.GetId() - wx.ID_FILE1
         path = self.fileHistory.GetHistoryFile(fileNum)
         self.m_filePicker.SetPath(path)
         evt = wx.FileDirPickerEvent(
-            wx.EVT_FILEPICKER_CHANGED.evtType[0], self, wx.ID_ANY, path
+            wx.EVT_FILEPICKER_CHANGED.typeId, self, wx.ID_ANY, path
         )
         self.fileChanged(evt)
 
     def Cleanup(self, *args):
         self.fileHistory.Save(self.config)
+        self.config.Flush()
 
     def log(self, msg, level=logging.INFO):
         colors = {
