@@ -10,7 +10,6 @@
 import wx
 import wx.xrc
 import wx.propgrid as pg
-import wx.richtext
 import wx.dataview
 import wx.adv
 
@@ -21,7 +20,7 @@ import wx.adv
 class MainWindow ( wx.Frame ):
 
     def __init__( self, parent ):
-        wx.Frame.__init__ ( self, parent, id = wx.ID_ANY, title = u"DPLoader2", pos = wx.DefaultPosition, size = wx.Size( 500,502 ), style = wx.DEFAULT_FRAME_STYLE|wx.TAB_TRAVERSAL )
+        wx.Frame.__init__ ( self, parent, id = wx.ID_ANY, title = u"DPLoader2", pos = wx.DefaultPosition, size = wx.Size( 500,646 ), style = wx.DEFAULT_FRAME_STYLE|wx.TAB_TRAVERSAL )
 
         self.SetSizeHints( wx.DefaultSize, wx.DefaultSize )
 
@@ -49,6 +48,9 @@ class MainWindow ( wx.Frame ):
 
         self.SetMenuBar( self.m_menubar )
 
+        self.m_statusBar = self.CreateStatusBar( 3, wx.STB_SIZEGRIP, wx.ID_ANY )
+        bSizer17 = wx.BoxSizer( wx.VERTICAL )
+
         bSizer8 = wx.BoxSizer( wx.VERTICAL )
 
         self.m_toolBar1 = wx.ToolBar( self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.TB_HORIZONTAL|wx.TB_TEXT )
@@ -64,18 +66,18 @@ class MainWindow ( wx.Frame ):
 
         bSizer8.Add( self.m_toolBar1, 0, wx.EXPAND, 5 )
 
+        bSizer16 = wx.BoxSizer( wx.VERTICAL )
+
         bSizer13 = wx.BoxSizer( wx.VERTICAL )
 
-        sbSizer1 = wx.StaticBoxSizer( wx.StaticBox( self, wx.ID_ANY, u"File Info" ), wx.VERTICAL )
-
-        self.m_filePicker = wx.FilePickerCtrl( sbSizer1.GetStaticBox(), wx.ID_ANY, wx.EmptyString, u"Select a file", u"All supported images (*.hex;*.bin)|*.bin;*.hex|Intel HEX files (*.hex)|*.hex|Binary files (*.bin)|*.bin", wx.DefaultPosition, wx.DefaultSize, wx.FLP_DEFAULT_STYLE|wx.FLP_FILE_MUST_EXIST|wx.FLP_OPEN|wx.FLP_SMALL|wx.FLP_USE_TEXTCTRL )
-        sbSizer1.Add( self.m_filePicker, 1, wx.ALL|wx.EXPAND, 5 )
-
-        self.m_propertyGridFileInfo = pg.PropertyGrid(sbSizer1.GetStaticBox(), wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.propgrid.PG_DEFAULT_STYLE|wx.propgrid.PG_HIDE_MARGIN|wx.propgrid.PG_TOOLTIPS)
+        self.m_propertyGridFileInfo = pg.PropertyGrid(self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.propgrid.PG_DEFAULT_STYLE|wx.propgrid.PG_HIDE_MARGIN|wx.propgrid.PG_TOOLTIPS)
         self.m_propertyGridFileInfo.SetExtraStyle( wx.propgrid.PG_EX_HELP_AS_TOOLTIPS )
+        self.m_propertyGridItem20 = self.m_propertyGridFileInfo.Append( pg.PropertyCategory( u"Update File Info", u"Update File Info" ) )
+        self.m_propertyGridItem7 = self.m_propertyGridFileInfo.Append( pg.FileProperty( u"File Path", u"File Path" ) )
+        self.m_propertyGridFileInfo.SetPropertyHelpString( self.m_propertyGridItem7, u"Path to software update file" )
         self.m_propertyGridItem1 = self.m_propertyGridFileInfo.Append( pg.StringProperty( u"Format", u"Format" ) )
         self.m_propertyGridFileInfo.SetPropertyHelpString( self.m_propertyGridItem1, u"Type of software update file" )
-        self.m_propertyGridItem2 = self.m_propertyGridFileInfo.Append( pg.StringProperty( u"Size", u"Size" ) )
+        self.m_propertyGridItem2 = self.m_propertyGridFileInfo.Append( pg.IntProperty( u"Size", u"Size" ) )
         self.m_propertyGridFileInfo.SetPropertyHelpString( self.m_propertyGridItem2, u"Total length, in bytes" )
         self.m_propertyGridItem3 = self.m_propertyGridFileInfo.Append( pg.StringProperty( u"Hash", u"Hash" ) )
         self.m_propertyGridFileInfo.SetPropertyHelpString( self.m_propertyGridItem3, u"SHA256 digest for checking data integrity" )
@@ -85,36 +87,35 @@ class MainWindow ( wx.Frame ):
         self.m_propertyGridFileInfo.SetPropertyHelpString( self.m_propertyGridItem5, u"Data Panel part number for firmware" )
         self.m_propertyGridItem6 = self.m_propertyGridFileInfo.Append( pg.StringProperty( u"Hardware Part Number", u"Hardware Part Number" ) )
         self.m_propertyGridFileInfo.SetPropertyHelpString( self.m_propertyGridItem6, u"Compatible Data Panel products" )
-        sbSizer1.Add( self.m_propertyGridFileInfo, 0, wx.ALL|wx.EXPAND, 5 )
+        self.m_propertyGridItem27 = self.m_propertyGridFileInfo.Append( pg.IntProperty( u"Security Counter", u"Security Counter" ) )
+        bSizer13.Add( self.m_propertyGridFileInfo, 1, wx.ALL|wx.EXPAND, 5 )
 
 
-        bSizer13.Add( sbSizer1, 1, wx.ALL|wx.EXPAND, 5 )
+        bSizer16.Add( bSizer13, 2, wx.ALL|wx.EXPAND, 5 )
 
 
-        bSizer8.Add( bSizer13, 1, wx.EXPAND, 5 )
+        bSizer8.Add( bSizer16, 1, wx.EXPAND, 5 )
 
         self.m_progressBar = wx.Gauge( self, wx.ID_ANY, 100, wx.DefaultPosition, wx.DefaultSize, wx.GA_HORIZONTAL )
         self.m_progressBar.SetValue( 0 )
-        bSizer8.Add( self.m_progressBar, 0, wx.ALL|wx.EXPAND, 5 )
+        bSizer8.Add( self.m_progressBar, 0, wx.ALL|wx.EXPAND|wx.FIXED_MINSIZE|wx.SHAPED, 5 )
 
-        self.m_richTextLog = wx.richtext.RichTextCtrl( self, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_READONLY|wx.VSCROLL|wx.HSCROLL|wx.NO_BORDER|wx.WANTS_CHARS )
-        bSizer8.Add( self.m_richTextLog, 1, wx.EXPAND |wx.ALL, 5 )
+        bSizer7 = wx.BoxSizer( wx.HORIZONTAL )
 
-        bSizer7 = wx.BoxSizer( wx.VERTICAL )
+        self.m_nameList = wx.dataview.TreeListCtrl( self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.dataview.TL_DEFAULT_STYLE )
+        self.m_nameList.AppendColumn( u"Device List", wx.COL_WIDTH_AUTOSIZE, wx.ALIGN_LEFT, wx.COL_RESIZABLE )
 
-        self.m_nameList = wx.dataview.DataViewListCtrl( self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, 0 )
-        self.m_nameListColumnAddress = self.m_nameList.AppendTextColumn( u"Address", wx.dataview.DATAVIEW_CELL_INERT, -1, wx.ALIGN_LEFT, wx.dataview.DATAVIEW_COL_RESIZABLE )
-        self.m_nameListColumnNAME = self.m_nameList.AppendTextColumn( u"Name", wx.dataview.DATAVIEW_CELL_INERT, -1, wx.ALIGN_LEFT, wx.dataview.DATAVIEW_COL_RESIZABLE )
-        self.m_nameListColumnNAME.GetRenderer().EnableEllipsize( wx.ELLIPSIZE_START );
-        bSizer7.Add( self.m_nameList, 2, wx.ALL|wx.EXPAND, 5 )
+        bSizer7.Add( self.m_nameList, 1, wx.EXPAND |wx.ALL, 5 )
 
 
         bSizer8.Add( bSizer7, 1, wx.EXPAND, 5 )
 
 
-        self.SetSizer( bSizer8 )
+        bSizer17.Add( bSizer8, 1, wx.EXPAND, 5 )
+
+
+        self.SetSizer( bSizer17 )
         self.Layout()
-        self.m_statusBar = self.CreateStatusBar( 3, wx.STB_SIZEGRIP, wx.ID_ANY )
 
         self.Centre( wx.BOTH )
 
@@ -126,8 +127,7 @@ class MainWindow ( wx.Frame ):
         self.Bind( wx.EVT_TOOL, self.toolScanClicked, id = self.m_toolScan.GetId() )
         self.Bind( wx.EVT_TOOL, self.toolConnectClicked, id = self.m_toolConnect.GetId() )
         self.Bind( wx.EVT_TOOL, self.toolDownloadClicked, id = self.m_toolDownload.GetId() )
-        self.m_filePicker.Bind( wx.EVT_FILEPICKER_CHANGED, self.fileChanged )
-        self.m_nameList.Bind( wx.dataview.EVT_DATAVIEW_SELECTION_CHANGED, self.addressSelectChanged, id = wx.ID_ANY )
+        self.m_nameList.Bind( wx.dataview.EVT_TREELIST_SELECTION_CHANGED, self.addressSelectChanged )
 
     def __del__( self ):
         pass
@@ -153,9 +153,6 @@ class MainWindow ( wx.Frame ):
         event.Skip()
 
     def toolDownloadClicked( self, event ):
-        event.Skip()
-
-    def fileChanged( self, event ):
         event.Skip()
 
     def addressSelectChanged( self, event ):
@@ -367,29 +364,38 @@ class SettingsDialog ( wx.Dialog ):
 class AboutDialog ( wx.Dialog ):
 
     def __init__( self, parent ):
-        wx.Dialog.__init__ ( self, parent, id = wx.ID_ANY, title = u"About DPLoader2", pos = wx.DefaultPosition, size = wx.DefaultSize, style = wx.DEFAULT_DIALOG_STYLE )
+        wx.Dialog.__init__ ( self, parent, id = wx.ID_ANY, title = u"About DPLoader2", pos = wx.DefaultPosition, size = wx.Size( -1,-1 ), style = wx.DEFAULT_DIALOG_STYLE )
 
         self.SetSizeHints( wx.DefaultSize, wx.DefaultSize )
+        self.SetForegroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_WINDOW ) )
+        self.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_WINDOW ) )
 
         bSizer13 = wx.BoxSizer( wx.VERTICAL )
 
         self.m_bitmap1 = wx.StaticBitmap( self, wx.ID_ANY, wx.Bitmap( self.GetRuntimeImagePath( u"../data/datapanel-logo.png" ), wx.BITMAP_TYPE_ANY ), wx.DefaultPosition, wx.DefaultSize, 0 )
+        self.m_bitmap1.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_WINDOW ) )
+
         bSizer13.Add( self.m_bitmap1, 0, 0, 5 )
 
         self.m_staticText12 = wx.StaticText( self, wx.ID_ANY, u"<big><b>DPLoader2 v0.0.0</b></big>\n\nSoftware update utility for Data Panel I/O blocks", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_CENTER_HORIZONTAL )
         self.m_staticText12.SetLabelMarkup( u"<big><b>DPLoader2 v0.0.0</b></big>\n\nSoftware update utility for Data Panel I/O blocks" )
         self.m_staticText12.Wrap( -1 )
 
-        bSizer13.Add( self.m_staticText12, 0, wx.ALL|wx.EXPAND, 5 )
+        self.m_staticText12.SetForegroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_WINDOWTEXT ) )
+        self.m_staticText12.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_WINDOW ) )
+
+        bSizer13.Add( self.m_staticText12, 2, wx.ALL|wx.EXPAND, 5 )
 
         self.m_staticText11 = wx.StaticText( self, wx.ID_ANY, u"<b>Data Panel Corporation</b>\n<small>181 Cheshire Ln. Suite 300\nPlymouth, MN 55441 USA</small>", wx.DefaultPosition, wx.DefaultSize, wx.ALIGN_CENTER_HORIZONTAL )
         self.m_staticText11.SetLabelMarkup( u"<b>Data Panel Corporation</b>\n<small>181 Cheshire Ln. Suite 300\nPlymouth, MN 55441 USA</small>" )
         self.m_staticText11.Wrap( -1 )
 
-        bSizer13.Add( self.m_staticText11, 0, wx.ALL|wx.EXPAND, 5 )
+        self.m_staticText11.SetForegroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_WINDOWTEXT ) )
+
+        bSizer13.Add( self.m_staticText11, 2, wx.ALL|wx.EXPAND, 5 )
 
         self.m_hyperlink1 = wx.adv.HyperlinkCtrl( self, wx.ID_ANY, u"datapanel.com", u"http://www.datapanel.com", wx.DefaultPosition, wx.DefaultSize, wx.adv.HL_DEFAULT_STYLE )
-        bSizer13.Add( self.m_hyperlink1, 0, wx.ALL|wx.EXPAND, 5 )
+        bSizer13.Add( self.m_hyperlink1, 1, wx.ALL|wx.EXPAND, 5 )
 
         m_sdbSizer2 = wx.StdDialogButtonSizer()
         self.m_sdbSizer2OK = wx.Button( self, wx.ID_OK )

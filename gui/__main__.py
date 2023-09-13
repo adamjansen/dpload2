@@ -3,7 +3,6 @@ import time
 import sys
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
 
 import can
 import intelhex
@@ -14,6 +13,9 @@ from ..dpload import DPLoad
 from ..image import Image, ImageTlvType
 
 from .gui import MainWindow, SettingsDialog, AboutDialog
+
+logging.basicConfig(level=logging.DEBUG)
+
 
 BITRATE_STRINGS = {
     100000: "100 kbps",
@@ -143,109 +145,74 @@ class GUI(MainWindow):
     def OnSettingsClicked(self, evt):
         dlg = ConfiguredSettingsDialog(self, self.config)
         try:
-            if dlg.ShowModal() == wx.ID_OK:
-                # Todo: update configuration
-                self.info("updating config")
-            else:
-                # Changes cancelled
-                self.info("config cancelled")
+            dlg.ShowModal()
         finally:
             dlg.Destroy()
 
     def OnFileHistory(self, evt):
         fileNum = evt.GetId() - wx.ID_FILE1
         path = self.fileHistory.GetHistoryFile(fileNum)
-        self.m_filePicker.SetPath(path)
-        evt = wx.FileDirPickerEvent(
-            wx.EVT_FILEPICKER_CHANGED.typeId, self, wx.ID_ANY, path
-        )
-        self.fileChanged(evt)
+        self.OpenFile(path)
 
     def Cleanup(self, *args):
         self.fileHistory.Save(self.config)
         self.config.Flush()
 
-    def log(self, msg, level=logging.INFO):
-        colors = {
-            logging.DEBUG: wx.LIGHT_GREY,
-            logging.INFO: wx.BLUE,
-            logging.WARN: wx.YELLOW,
-            logging.ERROR: wx.RED,
-        }
-        rt = self.m_richTextLog
-        rt.BeginTextColour(colors[level])
-        name = {
-            logging.DEBUG: "DEBUG",
-            logging.INFO: "INFO",
-            logging.WARN: "WARN",
-            logging.ERROR: "ERROR",
-        }[level]
-        rt.WriteText(f"{name}: ")
-        rt.EndTextColour()
-        rt.WriteText(f"{msg}\n")
-
-        rt.ShowPosition(-1)
-
-    def debug(self, msg):
-        self.log(msg, level=logging.DEBUG)
-
-    def info(self, msg):
-        self.log(msg, level=logging.INFO)
-
-    def error(self, msg):
-        self.log(msg, level=logging.ERROR)
-
-    def warn(self, msg):
-        self.log(msg, level=logging.WARN)
-
     def fileExitClicked(self, event):
-        self.log("Exit!")
+        # TODO
+        sys.exit(0)
 
     def toolOpenClicked(self, event):
-        filePickerButton = self.m_filePicker.GetChildren()[1]
-        evt = wx.PyCommandEvent(wx.EVT_BUTTON.typeId, filePickerButton.GetId())
-        wx.PostEvent(filePickerButton, evt)
-
-    def updateFileInfo(self):
-        format = (
-            "Intel HEX records file"
-            if self.image.filename.lower().endswith(".hex")
-            else "Raw binary data"
+        dlg = wx.FileDialog(
+            self,
+            message="Select a file",
+            defaultDir=os.getcwd(),
+            defaultFile="",
+            wildcard="All supported images (*.hex;*.bin)|*.bin;*.hex|Intel HEX files (*.hex)|*.hex|Binary files (*.bin)|*.bin",
+            style=wx.FD_OPEN | wx.FD_CHANGE_DIR | wx.FD_FILE_MUST_EXIST,
         )
-        properties = {
-            "Format": format,
-            "Size": self.image.size,
-            "Version": self.image.version,
-            "Hash": self.image.get_tlv(ImageTlvType.SHA256),
-            "Software Part Number": self.image.get_tlv(ImageTlvType.DP_SW_PART_NUMBER),
-            "Hardware Part Number": self.image.get_tlv(ImageTlvType.DP_HW_PART_NUMBER),
-        }
-        for label, value in properties.items():
-            self.m_propertyGridFileInfo.GetPropertyByName(label).SetValue(value)
+        if dlg.ShowModal() == wx.ID_CANCEL:
+            return
+        path = dlg.GetPaths()[0]
+        self.OpenFile(path)
 
-    def fileChanged(self, event):
-        path = event.GetPath()
-        self.info(f"Processing {path}")
+    def OpenFile(self, path):
         self.fileHistory.AddFileToHistory(path)
         self.m_statusBar.SetStatusText(os.path.basename(path), 0)
 
         if self.m_toolBar1.GetToolState(self.m_toolConnect.GetId()):
             self.m_toolBar1.EnableTool(self.m_toolDownload.GetId(), True)
         self.image.load(path)
-        self.updateFileInfo()
+        format = (
+            "Intel HEX records file"
+            if self.image.filename.lower().endswith(".hex")
+            else "Raw binary data"
+        )
+        properties = {
+            "File Path": self.image.filename,
+            "Format": format,
+            "Size": self.image.size,
+            "Version": self.image.version,
+            "Hash": self.image.get_tlv(ImageTlvType.SHA256),
+            "Software Part Number": self.image.get_tlv(ImageTlvType.DP_SW_PART_NUMBER),
+            "Hardware Part Number": self.image.get_tlv(ImageTlvType.DP_HW_PART_NUMBER),
+            "Security Counter": self.image.get_tlv(ImageTlvType.SEC_CNT),
+        }
+        for label, value in properties.items():
+            self.m_propertyGridFileInfo.GetPropertyByName(label).SetValue(value)
 
     def toolDownloadClicked(self, event):
         self.m_toolBar1.EnableTool(self.m_toolDownload.GetId(), False)
-        self.info("Erasing flash")
+        self.m_statusBar.SetStatusText("Erasing flash...", 0)
         wx.Yield()
         try:
             self.dpload.erase(da=self.da, timeout=5.0)
         except ValueError:
-            self.error("Unexpected response")
+            self.m_statusBar.SetStatusText("Unexpected response", 0)
             self.m_toolBar1.EnableTool(self.m_toolDownload.GetId(), True)
             return
         except TimeoutError:
-            self.error("Timeout waiting for response")
+            self.m_statusBar.SetStatusText("Timeout waiting for response", 0)
             self.m_toolBar1.EnableTool(self.m_toolDownload.GetId(), True)
             return
         wx.Yield()
@@ -257,18 +224,20 @@ class GUI(MainWindow):
         n = 0
         lines = self.image.hexdata.splitlines()
         self.m_progressBar.SetRange(len(lines))
-        self.info(f"Programming {len(lines)} records")
+        self.m_statusBar.SetStatusText(f"Programming {len(lines)} records")
         for lineNum, lineText in enumerate(lines):
             self.m_progressBar.SetValue(lineNum)
             record = bytes.fromhex(lineText[1:].strip())
             n += 1
             chunk += record
-            if n == 8:
+            if n == 16:
                 total_bytes += len(chunk)
                 try:
                     self.dpload.program_flash(chunk, da=self.da, timeout=2.0)
                 except TimeoutError:
-                    self.error("Timeout waiting for response! Programming failed.")
+                    self.m_statusBar.SetStatusText(
+                        "Timeout waiting for response. Programming failed"
+                    )
                     self.dpload.dm13_control(False)
                     return
                 speed_kb_per_sec = (total_bytes / 1024) / (time.time() - start)
@@ -280,66 +249,103 @@ class GUI(MainWindow):
             try:
                 self.dpload.program_flash(chunk, da=self.da, timeout=2.0)
             except TimeoutError:
-                self.error("Timeout waiting for response! Programming failed.")
+                self.m_statusBar.SetStatusText(
+                    "Timeout waiting for response. Programming failed"
+                )
                 self.dpload.dm13_control(False)
                 self.m_toolBar1.EnableTool(self.m_toolDownload.GetId(), True)
                 return
         wx.Yield()
         elapsed = time.time() - start
-        self.info(f"Programming address {self.da} complete in {elapsed:0.3f} seconds")
+        self.m_statusBar.SetStatusText(
+            f"Programmed {self.da} in {elapsed:0.3f} seconds"
+        )
+        wx.Yield()
         self.dpload.jump(da=self.da)
 
         self.dpload.dm13_control(False)
         self.m_toolBar1.EnableTool(self.m_toolDownload.GetId(), True)
 
     def toolScanClicked(self, event):
-        self.info("Scanning for devices")
+        self.m_statusBar.SetStatusText("Scanning for devices...")
+        wx.Yield()
         nodes = self.dpload.scan()
 
         self.m_nameList.DeleteAllItems()
+        root = self.m_nameList.GetRootItem()
         for addr, name in nodes:
-            self.m_nameList.AppendItem([f"{addr} ({addr:02x})", f"{name.hex()}", False])
+            node = self.m_nameList.AppendItem(root, f"{addr} ({addr:02x})")
+            name_node = self.m_nameList.AppendItem(node, f"NAME: {name.hex().upper()}")
+            name64 = int.from_bytes(name, 'little')
+            decoded_name = {
+                "Identity": name64 & 0x1FFFFF,
+                "Manufacturer Code": (name64 >> 21) & 0x7FF,
+                "ECU Instance": (name64 >> 32) & 0x7,
+                "Function Instance": (name64 >> 35) & 0x1f,
+                "Function": (name64 >> 49) & 0x7f,
+                "Vehicle System": (name64 >> 56) & 0xf,
+                "Industry Group": (name64 >> 60) & 0x7,
+                "Self Configurable Address": (name64 >> 63) & 0x1,
+            }
 
-        self.info(f"Found {len(nodes)} active nodes")
+            for label, value in decoded_name.items():
+                self.m_nameList.AppendItem(name_node, f"{label}: {value}")
+
+            ecu_info = self.dpload.ecu_info(addr)
+
+            # The last field is empty, or contains fields we can't interpret
+            pn, sn, location, type, mfg_name, hw_id, _ = ecu_info.split('*', 6)
+            if pn:
+                self.m_nameList.AppendItem(node, f"Part Number: {pn}")
+            if hw_id:
+                self.m_nameList.AppendItem(node, f"HW Revision: {hw_id}")
+            if type:
+                self.m_nameList.AppendItem(node, f"Type: {type}")
+            if sn:
+                self.m_nameList.AppendItem(node, f"Serial Number: {sn}")
+            if mfg_name:
+                self.m_nameList.AppendItem(node, f"Manufacturer: {mfg_name}")
+
+            software_node = self.m_nameList.AppendItem(node, f"Software Versions")
+            soft_info = self.dpload.soft_info(addr)
+            components = soft_info.split('*')[:-1]
+            for component in components:
+                name, version = component.split(' ', 1)
+                self.m_nameList.AppendItem(software_node, f"{name}: {version}")
+
+        self.m_statusBar.SetStatusText(f"Found {len(nodes)} active nodes")
 
     def addressSelectChanged(self, event):
-        row = self.m_nameList.GetSelectedRow()
-        if row == wx.NOT_FOUND:
+        item = self.m_nameList.GetSelection()
+        if item == wx.NOT_FOUND:
             self.m_toolBar1.EnableTool(self.m_toolConnect.GetId(), False)
             self.da = None
-        else:
-            self.m_toolBar1.EnableTool(self.m_toolConnect.GetId(), True)
-            addr = int(self.m_nameList.GetTextValue(row, 0).split(" ")[0])
-            self.da = addr
-            self.info(f"Selected address {addr}")
+            return
+
+        self.m_toolBar1.EnableTool(self.m_toolConnect.GetId(), True)
+
+        while (parent := self.m_nameList.GetItemParent(item)) != self.m_nameList.GetRootItem():
+            item = parent
+
+        text = self.m_nameList.GetItemText(item)
+
+        addr = int(text.split(" ", 1)[0])
+        self.da = addr
+        self.m_statusBar.SetStatusText(f"Selected address {addr}")
 
     def toolConnectClicked(self, event):
         if self.m_toolBar1.GetToolState(self.m_toolConnect.GetId()):
             self.m_toolBar1.ToggleTool(self.m_toolConnect.GetId(), True)
-            print(f"image_size={self.image.size}")
             if self.image.size > 0:
                 self.m_toolBar1.EnableTool(self.m_toolDownload.GetId(), True)
 
             self.dpload.enter(da=self.da)
-            self.info(f"Connecting to {self.da}")
+            self.m_statusBar.SetStatusText(f"Connecting to {self.da}")
         else:
             self.m_toolBar1.ToggleTool(self.m_toolDownload.GetId(), False)
 
             self.m_toolBar1.ToggleTool(self.m_toolConnect.GetId(), False)
-            self.info(f"Disconnecting from {self.da}")
-
-        #    # clear labels
-        #    self.m_labelAppVersion.SetLabel("")
-        #    self.m_labelOemVersion.SetLabel("")
-        #    self.m_labelPartNumber.SetLabel("")
-        # addr = int(self.m_nameList.GetTextValue(row, 0).split(" ")[0])
-        # self.da = addr
-        # self.info(f"Selected address {addr}")
-        # app_major, app_minor = self.dpload.get_app_info(da=addr, timeout=0.5)
-        # self.m_labelAppVersion.SetLabel(f"{app_major:02d}.{app_minor:02d}")
-        # sa, pn, oem_major, oem_minor = self.dpload.get_oem_info(da=addr, timeout=0.5)
-        # self.m_labelOemVersion.SetLabel(f"{oem_major:02d}.{oem_minor:02d}")
-        # self.m_labelPartNumber.SetLabel(f"{pn}")
+            self.m_statusBar.SetStatusText(f"Disconnecting from {self.da}")
 
 
 if __name__ == "__main__":

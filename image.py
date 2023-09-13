@@ -45,6 +45,7 @@ TLV_PROCESSORS = {
     ImageTlvType.SHA256: bytes.hex,
     ImageTlvType.DP_SW_PART_NUMBER: lambda s: s.decode("utf-8"),
     ImageTlvType.DP_HW_PART_NUMBER: lambda s: s.decode("utf-8"),
+    ImageTlvType.SEC_CNT: lambda v: int.from_bytes(v, 'little'),
 }
 
 
@@ -107,13 +108,11 @@ class Image:
 
             self.protected_tlvs = []
             while tlv_offset < tlv_end:
-                print(f"checking protected tlv at {tlv_offset:04x}")
                 tlv_type, tlv_length = struct.unpack_from(
                     "HH", self.ihex.gets(tlv_offset, TLV_INFO_SIZE)
                 )
                 tlv_offset += TLV_INFO_SIZE
                 tlv_data = self.ihex.gets(tlv_offset, tlv_length)
-                print(f"type={tlv_type:04x} length={tlv_length} data={tlv_data}")
                 tlv_offset += tlv_length
                 self.protected_tlvs.append((tlv_type, tlv_length, tlv_data))
 
@@ -207,32 +206,15 @@ class Image:
             self.ihex.tofile(out, "hex", byte_count=16)
             return out.getvalue()
 
-    def get_tlv(self, tlv):
+    def get_tlv(self, tlv, default=None):
+
         if not isinstance(tlv, ImageTlvType):
             tlv = ImageTlvType(tlv)
 
         for tag, _, value in self.tlvs + self.protected_tlvs:
             if ImageTlvType(tag) != tlv:
                 continue
-            try:
-                processor = TLV_PROCESSORS[ImageTlvType(tag)]
-            except IndexError:
-                processor = lambda v: v
-
+            processor = TLV_PROCESSORS.get(tlv, lambda v: v)
             return processor(value)
 
-        return None
-
-    def itertlvs(self):
-        for tag, length, value in self.tlvs + self.protected_tlvs:
-            try:
-                tlv_type = ImageTlvType(tag)
-            except ValueError:
-                continue  # ignore unknown TLVs
-
-            try:
-                processor = TLV_PROCESSORS[tlv_type]
-            except IndexError:
-                processor = lambda v: v
-
-            yield (tlv_type, processor(value))
+        return default

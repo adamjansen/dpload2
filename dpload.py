@@ -18,6 +18,12 @@ from .protocol import (
     IncompleteFrameError,
 )
 
+from .j1939 import (
+    J1939,
+    J1939_PGN_ECUID,
+    J1939_PGN_SOFT,
+)
+
 
 class DPLoad:
     def __init__(self, bus, sa=39, da=208):
@@ -30,11 +36,25 @@ class DPLoad:
 
         self.dm13_task = None
 
+        self.j1939 = J1939(self.bus, sa=self.sa)
+
     def _flush_rx(self):
         while True:
             msg = self.bus.recv(0)
             if msg is None:
                 return
+
+    def ecu_info(self, da=255):
+        self.bus.set_filters([])
+        ecu_info = self.j1939.request_pgn(J1939_PGN_ECUID, da=da)
+        self.log.info("Got ECU Info for %d: %s", da, ecu_info)
+        return ecu_info
+
+    def soft_info(self, da=255):
+        self.bus.set_filters([])
+        soft_info = self.j1939.request_pgn(J1939_PGN_SOFT, da=da)
+        self.log.info("Got software version information for %d: %s", da, soft_info)
+        return soft_info
 
     def enter(self, timeout=1.0, da=None):
         data = bytes.fromhex("0301040105090206")
@@ -177,5 +197,5 @@ class DPLoad:
         payload = self._request(CMD_ERASE_FLASH, payload, da=da, timeout=timeout)
         return None
 
-    def jump(self, da=None, timeout=1.0):
+    def jump(self, da=None, timeout=2.0):
         return self._request(CMD_JUMP_TO_APP, da=da, timeout=timeout)
