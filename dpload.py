@@ -37,6 +37,7 @@ class DPLoad:
         self.dm13_task = None
 
         self.j1939 = J1939(self.bus, sa=self.sa)
+        self.callback = None
 
     def _flush_rx(self):
         while True:
@@ -46,13 +47,13 @@ class DPLoad:
 
     def ecu_info(self, da=255):
         self.bus.set_filters([])
-        ecu_info = self.j1939.request_pgn(J1939_PGN_ECUID, da=da)
+        ecu_info = self.j1939.request_pgn(J1939_PGN_ECUID, da=da, timeout=0.1)
         self.log.info("Got ECU Info for %d: %s", da, ecu_info)
         return ecu_info
 
     def soft_info(self, da=255):
         self.bus.set_filters([])
-        soft_info = self.j1939.request_pgn(J1939_PGN_SOFT, da=da)
+        soft_info = self.j1939.request_pgn(J1939_PGN_SOFT, da=da, timeout=0.1)
         self.log.info("Got software version information for %d: %s", da, soft_info)
         return soft_info
 
@@ -76,8 +77,10 @@ class DPLoad:
         expiry = time.time() + timeout
         cas = []
         while time.time() < expiry:
-            msg = self.bus.recv(0.1)
+            msg = self.bus.recv(0.05)
             if msg is None or not msg.is_rx:
+                if self.callback is not None:
+                    self.callback()
                 continue
 
             sa = msg.arbitration_id & 0xFF
@@ -124,6 +127,8 @@ class DPLoad:
         while time.time() < expiry:
             msg = self.bus.recv(0.001)
             if msg is None or not msg.is_rx:
+                if self.callback is not None:
+                    self.callback()
                 continue
 
             rxframe += msg.data

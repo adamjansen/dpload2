@@ -20,7 +20,7 @@ import wx.adv
 class MainWindow ( wx.Frame ):
 
     def __init__( self, parent ):
-        wx.Frame.__init__ ( self, parent, id = wx.ID_ANY, title = u"DPLoader2", pos = wx.DefaultPosition, size = wx.Size( 500,646 ), style = wx.DEFAULT_FRAME_STYLE|wx.TAB_TRAVERSAL )
+        wx.Frame.__init__ ( self, parent, id = wx.ID_ANY, title = u"DPLoader2", pos = wx.DefaultPosition, size = wx.Size( 835,646 ), style = wx.DEFAULT_FRAME_STYLE|wx.TAB_TRAVERSAL )
 
         self.SetSizeHints( wx.DefaultSize, wx.DefaultSize )
 

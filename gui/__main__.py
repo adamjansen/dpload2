@@ -8,6 +8,7 @@ import can
 import intelhex
 
 import wx
+import wx.propgrid
 
 from ..dpload import DPLoad
 from ..image import Image, ImageTlvType
@@ -15,6 +16,44 @@ from ..image import Image, ImageTlvType
 from .gui import MainWindow, SettingsDialog, AboutDialog
 
 logging.basicConfig(level=logging.DEBUG)
+
+HEX_BIN_WILDCARD = "All supported images (*.hex;*.bin)|*.bin;*.hex|Intel HEX files (*.hex)|*.hex|Binary files (*.bin)|*.bin"
+
+
+SIZE_TiB = 1 << 40
+SIZE_GiB = 1 << 30
+SIZE_MiB = 1 << 20
+SIZE_KiB = 1 << 10
+
+class DataSizeProperty(wx.propgrid.IntProperty):
+    def __init__(self, label=wx.propgrid.PG_LABEL, name=wx.propgrid.PG_LABEL, value=0):
+        wx.propgrid.IntProperty.__init__(self, label, name, value)
+        self.nbytes = value
+
+
+    def ValueToString(self, value, flags):
+
+        if value < SIZE_KiB:
+            return f"{value:,} B"
+        elif value < SIZE_MiB:
+            return f"{value/SIZE_KiB:,.1f} KiB"
+        elif value < SIZE_GiB:
+            return f"{value/SIZE_MiB:,.1f} MiB"
+        elif value < SIZE_TiB:
+            return f"{value/SIZE_GiB:,.1f} GiB"
+        else:
+            return f"{value/SIZE_TiB:,.1f} TiB"
+
+    def StringToValue(self, st, flags):
+        try:
+            val = int(st)
+            return (True, val)
+        except (ValueError, TypeError):
+            pass
+        except:
+            raise
+        return (False, None)
+
 
 
 BITRATE_STRINGS = {
@@ -115,6 +154,20 @@ class GUI(MainWindow):
         self.m_toolBar1.EnableTool(self.m_toolConnect.GetId(), False)
         self.m_toolBar1.EnableTool(self.m_toolDownload.GetId(), False)
 
+        self.m_propertyGridFileInfo.RemoveProperty('Size')
+        self.m_propertyGridFileInfo.Insert('Hash', DataSizeProperty(label='Size', value=0))
+
+        for prop in self.m_propertyGridFileInfo.Properties:
+           prop.ChangeFlag(wx.propgrid.PG_PROP_READONLY, True)
+
+        file_prop :wx.propgrid.FileProperty = self.m_propertyGridFileInfo.GetProperty('File Path')
+        file_prop.ChangeFlag(wx.propgrid.PG_PROP_READONLY, False)
+        file_prop.SetAttribute(wx.propgrid.PG_DIALOG_TITLE, "Select a software update file")
+        file_prop.SetAttribute(wx.propgrid.PG_FILE_WILDCARD, HEX_BIN_WILDCARD)
+        file_prop.SetAttribute(wx.propgrid.PG_FILE_SHOW_FULL_PATH, False)
+        file_prop.SetAttribute(wx.propgrid.PG_FILE_INITIAL_PATH, os.getcwd())
+
+
         self._load_config()
 
         self.bus = can.interface.Bus(
@@ -123,6 +176,8 @@ class GUI(MainWindow):
             bitrate=self.can_bitrate,
         )
         self.dpload = DPLoad(bus=self.bus, sa=self.sa)
+        self.dpload.callback = wx.Yield
+        wx.CallLater(500, self.UpdateBusStatus)
 
     def _load_config(self):
         data_dir = wx.StandardPaths.Get().GetUserDataDir()
@@ -159,7 +214,8 @@ class GUI(MainWindow):
         self.config.Flush()
 
     def fileExitClicked(self, event):
-        # TODO
+        self.disconnect()
+        self.dpload.bus.shutdown()
         sys.exit(0)
 
     def toolOpenClicked(self, event):
@@ -168,7 +224,7 @@ class GUI(MainWindow):
             message="Select a file",
             defaultDir=os.getcwd(),
             defaultFile="",
-            wildcard="All supported images (*.hex;*.bin)|*.bin;*.hex|Intel HEX files (*.hex)|*.hex|Binary files (*.bin)|*.bin",
+            wildcard=HEX_BIN_WILDCARD,
             style=wx.FD_OPEN | wx.FD_CHANGE_DIR | wx.FD_FILE_MUST_EXIST,
         )
         if dlg.ShowModal() == wx.ID_CANCEL:
@@ -204,7 +260,17 @@ class GUI(MainWindow):
     def toolDownloadClicked(self, event):
         self.m_toolBar1.EnableTool(self.m_toolDownload.GetId(), False)
         self.m_statusBar.SetStatusText("Erasing flash...", 0)
+        self.m_progressBar.SetRange(100)
+        self.m_progressBar.SetValue(0)
+
+        def pulse():
+            if self.m_progressBar.GetValue() == 0:
+                self.m_progressBar.Pulse()
+                wx.CallLater(100, pulse)
+
+        wx.CallLater(0, pulse)
         wx.Yield()
+
         try:
             self.dpload.erase(da=self.da, timeout=5.0)
         except ValueError:
@@ -215,6 +281,7 @@ class GUI(MainWindow):
             self.m_statusBar.SetStatusText("Timeout waiting for response", 0)
             self.m_toolBar1.EnableTool(self.m_toolDownload.GetId(), True)
             return
+        wx.CallAfter(self.m_progressBar.SetValue, 100)
         wx.Yield()
 
         self.dpload.dm13_control(True)
@@ -230,7 +297,7 @@ class GUI(MainWindow):
             record = bytes.fromhex(lineText[1:].strip())
             n += 1
             chunk += record
-            if n == 16:
+            if n == 8:
                 total_bytes += len(chunk)
                 try:
                     self.dpload.program_flash(chunk, da=self.da, timeout=2.0)
@@ -258,18 +325,70 @@ class GUI(MainWindow):
         wx.Yield()
         elapsed = time.time() - start
         self.m_statusBar.SetStatusText(
-            f"Programmed {self.da} in {elapsed:0.3f} seconds"
+            f"Programmed {self.da} in {elapsed:0.3f} seconds", 1
         )
         wx.Yield()
-        self.dpload.jump(da=self.da)
 
+        self.dpload.jump(da=self.da)
         self.dpload.dm13_control(False)
-        self.m_toolBar1.EnableTool(self.m_toolDownload.GetId(), True)
+
+        self.m_statusBar.SetStatusText("Waiting for device to complete update", 0)
+        self.m_progressBar.SetValue(0)
+        self.m_progressBar.Pulse()
+        wx.CallLater(0, pulse)
+
+
+        expiry = time.time() + 60.0
+        new_info = None
+        self.dpload._flush_rx()
+        self.dpload.bus.set_filters([])
+        while time.time() < expiry:
+            msg = self.dpload.bus.recv(0.1)
+            if msg is None or not msg.is_rx:
+                continue
+            if (msg.arbitration_id & 0x0FFFFFF) == (0x00EEFF00 + self.da):
+                break
+            self.m_progressBar.Pulse()
+            wx.Yield()
+
+
+        self.disconnect()
+        self.m_progressBar.SetRange(100)
+        wx.CallAfter(self.m_progressBar.SetValue, 100)
+        if time.time() > expiry:
+            self.m_statusBar.SetStatusText("Programming failed!", 0)
+        else:
+            wx.MilliSleep(2000)
+
+            new_info = self.dpload.soft_info(da=self.da)
+            file_version = self.m_propertyGridFileInfo.GetProperty('Version').GetValue()
+            device_version = new_info[4:].split('*', 1)[0]
+            if file_version != device_version:
+                self.m_statusBar.SetStatusText("Wrong version detected", 0)
+
+            else:
+                self.m_statusBar.SetStatusText(f"Version {file_version} OK", 0)
+
+
+    def UpdateBusStatus(self, *args, **kwargs):
+        self.m_statusBar.SetStatusText(f"{self.dpload.bus.channel_info}: {self.dpload.bus.state.name}", 2)
+        wx.CallLater(500, self.UpdateBusStatus, args, kwargs)
 
     def toolScanClicked(self, event):
+        self.m_progressBar.SetRange(100)
+        self.m_progressBar.SetValue(0)
+        def pulse():
+            if self.m_progressBar.GetValue() == 0:
+                self.m_progressBar.Pulse()
+                wx.CallLater(100, pulse)
+
+        wx.CallLater(0, pulse)
+        wx.Yield()
+
         self.m_statusBar.SetStatusText("Scanning for devices...")
         wx.Yield()
         nodes = self.dpload.scan()
+        wx.CallAfter(self.m_progressBar.SetValue, 100)
 
         self.m_nameList.DeleteAllItems()
         root = self.m_nameList.GetRootItem()
@@ -314,10 +433,12 @@ class GUI(MainWindow):
                 self.m_nameList.AppendItem(software_node, f"{name}: {version}")
 
         self.m_statusBar.SetStatusText(f"Found {len(nodes)} active nodes")
+        self.m_nameList.Select(self.m_nameList.FirstItem)
+        self.addressSelectChanged(None)
 
     def addressSelectChanged(self, event):
         item = self.m_nameList.GetSelection()
-        if item == wx.NOT_FOUND:
+        if item == wx.NOT_FOUND or not item.IsOk():
             self.m_toolBar1.EnableTool(self.m_toolConnect.GetId(), False)
             self.da = None
             return
@@ -333,19 +454,43 @@ class GUI(MainWindow):
         self.da = addr
         self.m_statusBar.SetStatusText(f"Selected address {addr}")
 
+
+    def disconnect(self):
+        self.m_toolBar1.ToggleTool(self.m_toolDownload.GetId(), False)
+
+        self.m_toolBar1.ToggleTool(self.m_toolConnect.GetId(), False)
+        #self.m_statusBar.SetStatusText(f"Disconnecting from {self.da}")
+
+    def connect(self):
+        self.dpload.enter(da=self.da)
+        wx.Yield()
+        expiry = time.time() + 1.0
+        while time.time() < expiry:
+            try:
+                major, minor = self.dpload.get_boot_info(da=self.da)
+                self.m_statusBar.SetStatusText(f'BL version {major}.{minor}')
+                break
+            except TimeoutError:
+                pass
+            wx.Yield()
+
+        if time.time() > expiry:
+            self.m_statusBar.SetStatusText(f'Bootloader did not respond')
+            self.disconnect()
+
     def toolConnectClicked(self, event):
         if self.m_toolBar1.GetToolState(self.m_toolConnect.GetId()):
             self.m_toolBar1.ToggleTool(self.m_toolConnect.GetId(), True)
             if self.image.size > 0:
                 self.m_toolBar1.EnableTool(self.m_toolDownload.GetId(), True)
 
-            self.dpload.enter(da=self.da)
-            self.m_statusBar.SetStatusText(f"Connecting to {self.da}")
+            self.connect()
         else:
-            self.m_toolBar1.ToggleTool(self.m_toolDownload.GetId(), False)
-
-            self.m_toolBar1.ToggleTool(self.m_toolConnect.GetId(), False)
-            self.m_statusBar.SetStatusText(f"Disconnecting from {self.da}")
+            try:
+                self.dpload.jump(da=self.da)
+            except TimeoutError:
+                pass
+            self.disconnect()
 
 
 if __name__ == "__main__":

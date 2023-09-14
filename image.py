@@ -193,7 +193,9 @@ class Image:
 
     @property
     def size(self):
-        tlv_size = sum([length for (_, length, _) in self.tlvs]) + 8
+        tlv_size = sum([length for (_, length, _) in self.tlvs])
+        if len(self.tlvs) > 0:
+            tlv_size += 8
         return self.header_size + self.image_size + self.protected_tlv_size + tlv_size
 
     @property
