@@ -5,7 +5,7 @@ import time
 
 import can
 
-from .protocol import (
+from dpload2.protocol import (
     encode,
     decode,
     CMD_READ_BOOT_INFO,
@@ -18,7 +18,7 @@ from .protocol import (
     IncompleteFrameError,
 )
 
-from .j1939 import (
+from dpload2.j1939 import (
     J1939,
     J1939_PGN_ECUID,
     J1939_PGN_SOFT,

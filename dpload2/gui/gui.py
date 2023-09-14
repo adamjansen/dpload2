@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ###########################################################################
-## Python code generated with wxFormBuilder (version 3.10.1-88b0f50)
+## Python code generated with wxFormBuilder (version 3.10.1-0-g8feb16b3)
 ## http://www.wxformbuilder.org/
 ##
 ## PLEASE DO *NOT* EDIT THIS FILE!
@@ -88,17 +88,17 @@ class MainWindow ( wx.Frame ):
         self.m_propertyGridItem6 = self.m_propertyGridFileInfo.Append( pg.StringProperty( u"Hardware Part Number", u"Hardware Part Number" ) )
         self.m_propertyGridFileInfo.SetPropertyHelpString( self.m_propertyGridItem6, u"Compatible Data Panel products" )
         self.m_propertyGridItem27 = self.m_propertyGridFileInfo.Append( pg.IntProperty( u"Security Counter", u"Security Counter" ) )
-        bSizer13.Add( self.m_propertyGridFileInfo, 1, wx.ALL|wx.EXPAND, 5 )
+        bSizer13.Add( self.m_propertyGridFileInfo, 2, wx.ALL|wx.EXPAND, 5 )
 
 
-        bSizer16.Add( bSizer13, 2, wx.ALL|wx.EXPAND, 5 )
+        bSizer16.Add( bSizer13, 2, wx.EXPAND, 5 )
 
 
         bSizer8.Add( bSizer16, 1, wx.EXPAND, 5 )
 
         self.m_progressBar = wx.Gauge( self, wx.ID_ANY, 100, wx.DefaultPosition, wx.DefaultSize, wx.GA_HORIZONTAL )
         self.m_progressBar.SetValue( 0 )
-        bSizer8.Add( self.m_progressBar, 0, wx.ALL|wx.EXPAND|wx.FIXED_MINSIZE|wx.SHAPED, 5 )
+        bSizer8.Add( self.m_progressBar, 0, wx.EXPAND, 5 )
 
         bSizer7 = wx.BoxSizer( wx.HORIZONTAL )
 
@@ -394,8 +394,19 @@ class AboutDialog ( wx.Dialog ):
 
         bSizer13.Add( self.m_staticText11, 2, wx.ALL|wx.EXPAND, 5 )
 
-        self.m_hyperlink1 = wx.adv.HyperlinkCtrl( self, wx.ID_ANY, u"datapanel.com", u"http://www.datapanel.com", wx.DefaultPosition, wx.DefaultSize, wx.adv.HL_DEFAULT_STYLE )
-        bSizer13.Add( self.m_hyperlink1, 1, wx.ALL|wx.EXPAND, 5 )
+        bSizer16 = wx.BoxSizer( wx.HORIZONTAL )
+
+
+        bSizer16.Add( ( 0, 0), 1, wx.EXPAND, 5 )
+
+        self.m_hyperlink1 = wx.adv.HyperlinkCtrl( self, wx.ID_ANY, u"datapanel.com", u"http://www.datapanel.com", wx.DefaultPosition, wx.DefaultSize, wx.adv.HL_ALIGN_CENTRE|wx.adv.HL_DEFAULT_STYLE )
+        bSizer16.Add( self.m_hyperlink1, 0, wx.ALL|wx.EXPAND, 5 )
+
+
+        bSizer16.Add( ( 0, 0), 1, wx.EXPAND, 5 )
+
+
+        bSizer13.Add( bSizer16, 1, wx.EXPAND, 5 )
 
         m_sdbSizer2 = wx.StdDialogButtonSizer()
         self.m_sdbSizer2OK = wx.Button( self, wx.ID_OK )

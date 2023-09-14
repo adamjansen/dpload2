@@ -16,8 +16,8 @@ from rich.console import Console
 from rich.table import Table
 from rich.logging import RichHandler
 
-from .dpload import DPLoad
-from .protocol import crc16
+from dpload2.dpload import DPLoad
+from dpload2.protocol import crc16
 
 VERSION = "2.0"
 

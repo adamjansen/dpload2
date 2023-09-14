@@ -10,10 +10,9 @@ import intelhex
 import wx
 import wx.propgrid
 
-from ..dpload import DPLoad
-from ..image import Image, ImageTlvType
-
-from .gui import MainWindow, SettingsDialog, AboutDialog
+from dpload2.dpload import DPLoad
+from dpload2.image import Image, ImageTlvType
+from dpload2.gui.gui import MainWindow, SettingsDialog, AboutDialog
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -25,11 +24,11 @@ SIZE_GiB = 1 << 30
 SIZE_MiB = 1 << 20
 SIZE_KiB = 1 << 10
 
+
 class DataSizeProperty(wx.propgrid.IntProperty):
     def __init__(self, label=wx.propgrid.PG_LABEL, name=wx.propgrid.PG_LABEL, value=0):
         wx.propgrid.IntProperty.__init__(self, label, name, value)
         self.nbytes = value
-
 
     def ValueToString(self, value, flags):
 
@@ -55,7 +54,6 @@ class DataSizeProperty(wx.propgrid.IntProperty):
         return (False, None)
 
 
-
 BITRATE_STRINGS = {
     100000: "100 kbps",
     125000: "125 kbps",
@@ -67,6 +65,7 @@ BITRATE_STRINGS = {
 BITRATE_VALUES = {value: key for (key, value) in BITRATE_STRINGS.items()}
 
 root_dir = os.path.dirname(sys.modules[DPLoad.__module__].__file__)
+print(root_dir)
 
 
 def translate_image_path(_, path):
@@ -154,19 +153,25 @@ class GUI(MainWindow):
         self.m_toolBar1.EnableTool(self.m_toolConnect.GetId(), False)
         self.m_toolBar1.EnableTool(self.m_toolDownload.GetId(), False)
 
-        self.m_propertyGridFileInfo.RemoveProperty('Size')
-        self.m_propertyGridFileInfo.Insert('Hash', DataSizeProperty(label='Size', value=0))
+        self.m_propertyGridFileInfo.RemoveProperty("Size")
+        self.m_propertyGridFileInfo.Insert(
+            "Hash", DataSizeProperty(label="Size", value=0)
+        )
 
         for prop in self.m_propertyGridFileInfo.Properties:
-           prop.ChangeFlag(wx.propgrid.PG_PROP_READONLY, True)
+            prop.ChangeFlag(wx.propgrid.PG_PROP_READONLY, True)
 
-        file_prop :wx.propgrid.FileProperty = self.m_propertyGridFileInfo.GetProperty('File Path')
+        self.m_propertyGridFileInfo.SetSplitterLeft()
+        file_prop: wx.propgrid.FileProperty = self.m_propertyGridFileInfo.GetProperty(
+            "File Path"
+        )
         file_prop.ChangeFlag(wx.propgrid.PG_PROP_READONLY, False)
-        file_prop.SetAttribute(wx.propgrid.PG_DIALOG_TITLE, "Select a software update file")
+        file_prop.SetAttribute(
+            wx.propgrid.PG_DIALOG_TITLE, "Select a software update file"
+        )
         file_prop.SetAttribute(wx.propgrid.PG_FILE_WILDCARD, HEX_BIN_WILDCARD)
         file_prop.SetAttribute(wx.propgrid.PG_FILE_SHOW_FULL_PATH, False)
         file_prop.SetAttribute(wx.propgrid.PG_FILE_INITIAL_PATH, os.getcwd())
-
 
         self._load_config()
 
@@ -337,7 +342,6 @@ class GUI(MainWindow):
         self.m_progressBar.Pulse()
         wx.CallLater(0, pulse)
 
-
         expiry = time.time() + 60.0
         new_info = None
         self.dpload._flush_rx()
@@ -351,7 +355,6 @@ class GUI(MainWindow):
             self.m_progressBar.Pulse()
             wx.Yield()
 
-
         self.disconnect()
         self.m_progressBar.SetRange(100)
         wx.CallAfter(self.m_progressBar.SetValue, 100)
@@ -361,22 +364,24 @@ class GUI(MainWindow):
             wx.MilliSleep(2000)
 
             new_info = self.dpload.soft_info(da=self.da)
-            file_version = self.m_propertyGridFileInfo.GetProperty('Version').GetValue()
-            device_version = new_info[4:].split('*', 1)[0]
+            file_version = self.m_propertyGridFileInfo.GetProperty("Version").GetValue()
+            device_version = new_info[4:].split("*", 1)[0]
             if file_version != device_version:
                 self.m_statusBar.SetStatusText("Wrong version detected", 0)
 
             else:
                 self.m_statusBar.SetStatusText(f"Version {file_version} OK", 0)
 
-
     def UpdateBusStatus(self, *args, **kwargs):
-        self.m_statusBar.SetStatusText(f"{self.dpload.bus.channel_info}: {self.dpload.bus.state.name}", 2)
+        self.m_statusBar.SetStatusText(
+            f"{self.dpload.bus.channel_info}: {self.dpload.bus.state.name}", 2
+        )
         wx.CallLater(500, self.UpdateBusStatus, args, kwargs)
 
     def toolScanClicked(self, event):
         self.m_progressBar.SetRange(100)
         self.m_progressBar.SetValue(0)
+
         def pulse():
             if self.m_progressBar.GetValue() == 0:
                 self.m_progressBar.Pulse()
@@ -395,14 +400,14 @@ class GUI(MainWindow):
         for addr, name in nodes:
             node = self.m_nameList.AppendItem(root, f"{addr} ({addr:02x})")
             name_node = self.m_nameList.AppendItem(node, f"NAME: {name.hex().upper()}")
-            name64 = int.from_bytes(name, 'little')
+            name64 = int.from_bytes(name, "little")
             decoded_name = {
                 "Identity": name64 & 0x1FFFFF,
                 "Manufacturer Code": (name64 >> 21) & 0x7FF,
                 "ECU Instance": (name64 >> 32) & 0x7,
-                "Function Instance": (name64 >> 35) & 0x1f,
-                "Function": (name64 >> 49) & 0x7f,
-                "Vehicle System": (name64 >> 56) & 0xf,
+                "Function Instance": (name64 >> 35) & 0x1F,
+                "Function": (name64 >> 49) & 0x7F,
+                "Vehicle System": (name64 >> 56) & 0xF,
                 "Industry Group": (name64 >> 60) & 0x7,
                 "Self Configurable Address": (name64 >> 63) & 0x1,
             }
@@ -413,7 +418,7 @@ class GUI(MainWindow):
             ecu_info = self.dpload.ecu_info(addr)
 
             # The last field is empty, or contains fields we can't interpret
-            pn, sn, location, type, mfg_name, hw_id, _ = ecu_info.split('*', 6)
+            pn, sn, location, type, mfg_name, hw_id, _ = ecu_info.split("*", 6)
             if pn:
                 self.m_nameList.AppendItem(node, f"Part Number: {pn}")
             if hw_id:
@@ -427,9 +432,9 @@ class GUI(MainWindow):
 
             software_node = self.m_nameList.AppendItem(node, f"Software Versions")
             soft_info = self.dpload.soft_info(addr)
-            components = soft_info.split('*')[:-1]
+            components = soft_info.split("*")[:-1]
             for component in components:
-                name, version = component.split(' ', 1)
+                name, version = component.split(" ", 1)
                 self.m_nameList.AppendItem(software_node, f"{name}: {version}")
 
         self.m_statusBar.SetStatusText(f"Found {len(nodes)} active nodes")
@@ -445,7 +450,9 @@ class GUI(MainWindow):
 
         self.m_toolBar1.EnableTool(self.m_toolConnect.GetId(), True)
 
-        while (parent := self.m_nameList.GetItemParent(item)) != self.m_nameList.GetRootItem():
+        while (
+            parent := self.m_nameList.GetItemParent(item)
+        ) != self.m_nameList.GetRootItem():
             item = parent
 
         text = self.m_nameList.GetItemText(item)
@@ -454,12 +461,11 @@ class GUI(MainWindow):
         self.da = addr
         self.m_statusBar.SetStatusText(f"Selected address {addr}")
 
-
     def disconnect(self):
         self.m_toolBar1.ToggleTool(self.m_toolDownload.GetId(), False)
 
         self.m_toolBar1.ToggleTool(self.m_toolConnect.GetId(), False)
-        #self.m_statusBar.SetStatusText(f"Disconnecting from {self.da}")
+        # self.m_statusBar.SetStatusText(f"Disconnecting from {self.da}")
 
     def connect(self):
         self.dpload.enter(da=self.da)
@@ -468,14 +474,14 @@ class GUI(MainWindow):
         while time.time() < expiry:
             try:
                 major, minor = self.dpload.get_boot_info(da=self.da)
-                self.m_statusBar.SetStatusText(f'BL version {major}.{minor}')
+                self.m_statusBar.SetStatusText(f"BL version {major}.{minor}")
                 break
             except TimeoutError:
                 pass
             wx.Yield()
 
         if time.time() > expiry:
-            self.m_statusBar.SetStatusText(f'Bootloader did not respond')
+            self.m_statusBar.SetStatusText(f"Bootloader did not respond")
             self.disconnect()
 
     def toolConnectClicked(self, event):
@@ -493,7 +499,7 @@ class GUI(MainWindow):
             self.disconnect()
 
 
-if __name__ == "__main__":
+def run():
     app = wx.App(redirect=True)
     app.AppDisplayName = "DPLoader2"
     app.AppName = "dpload2"
@@ -510,3 +516,7 @@ if __name__ == "__main__":
         message = "".join(traceback.format_exception(*sys.exc_info()))
         dialog = wx.MessageDialog(None, message, "Error!", wx.OK | wx.ICON_ERROR)
         dialog.ShowModal()
+
+
+if __name__ == "__main__":
+    run()

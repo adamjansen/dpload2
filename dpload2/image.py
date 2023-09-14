@@ -1,8 +1,9 @@
 import hashlib
 from enum import Enum
 import struct
-from intelhex import IntelHex, NotEnoughDataError
 import io
+
+from intelhex import IntelHex, NotEnoughDataError
 
 
 class InvalidImageError(Exception):
@@ -45,7 +46,7 @@ TLV_PROCESSORS = {
     ImageTlvType.SHA256: bytes.hex,
     ImageTlvType.DP_SW_PART_NUMBER: lambda s: s.decode("utf-8"),
     ImageTlvType.DP_HW_PART_NUMBER: lambda s: s.decode("utf-8"),
-    ImageTlvType.SEC_CNT: lambda v: int.from_bytes(v, 'little'),
+    ImageTlvType.SEC_CNT: lambda v: int.from_bytes(v, "little"),
 }
 
 
